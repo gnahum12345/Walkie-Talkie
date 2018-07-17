@@ -30,9 +30,11 @@ import android.view.View;
 import android.view.ViewAnimationUtils;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import com.google.android.gms.nearby.connection.ConnectionInfo;
 import com.google.android.gms.nearby.connection.Payload;
 import com.google.android.gms.nearby.connection.Strategy;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
@@ -41,22 +43,24 @@ import java.util.Set;
 
 /**
  * Our WalkieTalkie Activity. This Activity has 4 {@link State}s.
- *
+ * <p>
  * <p>{@link State#UNKNOWN}: We cannot do anything while we're in this state. The app is likely in
  * the background.
- *
+ * <p>
  * <p>{@link State#DISCOVERING}: Our default state (after we've connected). We constantly listen for
  * a device to advertise near us.
- *
+ * <p>
  * <p>{@link State#ADVERTISING}: If a user shakes their device, they enter this state. We advertise
  * our device so that others nearby can discover us.
- *
+ * <p>
  * <p>{@link State#CONNECTED}: We've connected to another device. We can now talk to them by holding
  * down the volume keys and speaking into the phone. We'll continue to advertise (if we were already
  * advertising) so that more people can connect to us.
  */
 public class MainActivity extends ConnectionsActivity implements SensorEventListener {
-    /** If true, debug logs are shown on the device. */
+    /**
+     * If true, debug logs are shown on the device.
+     */
     private static final boolean DEBUG = true;
 
     /**
@@ -65,7 +69,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
      */
     private static final Strategy STRATEGY = Strategy.P2P_CLUSTER;
 
-    /** Acceleration required to detect a shake. In multiples of Earth's gravity. */
+    /**
+     * Acceleration required to detect a shake. In multiples of Earth's gravity.
+     */
     private static final float SHAKE_THRESHOLD_GRAVITY = 2;
 
     /**
@@ -74,10 +80,14 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
      */
     private static final long ADVERTISING_DURATION = 10000;
 
-    /** How long to vibrate the phone when we change states. */
+    /**
+     * How long to vibrate the phone when we change states.
+     */
     private static final long VIBRATION_STRENGTH = 500;
 
-    /** Length of state change animations. */
+    /**
+     * Length of state change animations.
+     */
     private static final long ANIMATION_DURATION = 600;
 
     /**
@@ -93,28 +103,45 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
      */
     private State mState = State.UNKNOWN;
 
-    /** A random UID used as this device's endpoint name. */
+    /**
+     * A random UID used as this device's endpoint name.
+     */
     private String mName;
 
-    /** Displays the previous state during animation transitions. */
+    /**
+     * Displays the previous state during animation transitions.
+     */
     private TextView mPreviousStateView;
 
-    /** Displays the current state. */
+    /**
+     * Displays the current state.
+     */
     private TextView mCurrentStateView;
 
-    /** An animator that controls the animation from previous state to current state. */
-    @Nullable private Animator mCurrentAnimator;
+    /**
+     * An animator that controls the animation from previous state to current state.
+     */
+    @Nullable
+    private Animator mCurrentAnimator;
 
-    /** A running log of debug messages. Only visible when DEBUG=true. */
+    /**
+     * A running log of debug messages. Only visible when DEBUG=true.
+     */
     private TextView mDebugLogView;
 
-    /** The SensorManager gives us access to sensors on the device. */
+    /**
+     * The SensorManager gives us access to sensors on the device.
+     */
     private SensorManager mSensorManager;
 
-    /** The accelerometer sensor allows us to detect device movement for shake-to-advertise. */
+    /**
+     * The accelerometer sensor allows us to detect device movement for shake-to-advertise.
+     */
     private Sensor mAccelerometer;
 
-    /** Listens to holding/releasing the volume rocker. */
+    /**
+     * Listens to holding/releasing the volume rocker.
+     */
     private final GestureDetector mGestureDetector =
             new GestureDetector(KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_UP) {
                 @Override
@@ -130,13 +157,20 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
                 }
             };
 
-    /** For recording audio as the user speaks. */
-    @Nullable private AudioRecorder mRecorder;
+    /**
+     * For recording audio as the user speaks.
+     */
+    @Nullable
+    private AudioRecorder mRecorder;
 
-    /** For playing audio from other users nearby. */
+    /**
+     * For playing audio from other users nearby.
+     */
     private final Set<AudioPlayer> mAudioPlayers = new HashSet<>();
 
-    /** The phone's original media volume. */
+    /**
+     * The phone's original media volume.
+     */
     private int mOriginalVolume;
 
     /**
@@ -145,7 +179,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
      */
     private final Handler mUiHandler = new Handler(Looper.getMainLooper());
 
-    /** Starts discovery. Used in a postDelayed manor with {@link #mUiHandler}. */
+    /**
+     * Starts discovery. Used in a postDelayed manor with {@link #mUiHandler}.
+     */
     private final Runnable mDiscoverRunnable =
             new Runnable() {
                 @Override
@@ -229,6 +265,8 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
     @Override
     public void onBackPressed() {
         if (getState() == State.CONNECTED || getState() == State.ADVERTISING) {
+            stopAdvertising();
+            stopDiscovering();
             setState(State.DISCOVERING);
             return;
         }
@@ -242,6 +280,7 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
             connectToEndpoint(endpoint);
         }
     }
+
 
     @Override
     protected void onConnectionInitiated(Endpoint endpoint, ConnectionInfo connectionInfo) {
@@ -267,16 +306,24 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         // If we lost all our endpoints, then we should reset the state of our app and go back
         // to our initial state (discovering).
         if (getConnectedEndpoints().isEmpty()) {
+            stopAdvertising();
+            stopDiscovering();
             setState(State.DISCOVERING);
         }
+
     }
 
     @Override
     protected void onConnectionFailed(Endpoint endpoint) {
         // Let's try someone else.
+        super.onConnectionFailed(endpoint);
+
         if (getState() == State.DISCOVERING && !getDiscoveredEndpoints().isEmpty()) {
             connectToEndpoint(pickRandomElem(getDiscoveredEndpoints()));
         }
+        stopAdvertising();
+        stopDiscovering();
+        setState(State.DISCOVERING);
     }
 
     /**
@@ -296,7 +343,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         onStateChanged(oldState, state);
     }
 
-    /** @return The current state. */
+    /**
+     * @return The current state.
+     */
     private State getState() {
         return mState;
     }
@@ -315,26 +364,21 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         // Update Nearby Connections to the new state.
         switch (newState) {
             case DISCOVERING:
-                if (isAdvertising()) {
-                    stopAdvertising();
-                }
+                // do nothing and fall through to advertising.
+            case ADVERTISING:
                 disconnectFromAllEndpoints();
                 startDiscovering();
-                break;
-            case ADVERTISING:
-                if (isDiscovering()) {
-                    stopDiscovering();
-                }
-                disconnectFromAllEndpoints();
                 startAdvertising();
+                logD("I am advertising and discovering at the same time.");
                 break;
             case CONNECTED:
+                removeCallbacks(mDiscoverRunnable);
+                logD("I connected but I'm still discovering and advertising");
                 if (isDiscovering()) {
-                    stopDiscovering();
-                } else if (isAdvertising()) {
-                    // Continue to advertise, so others can still connect,
-                    // but clear the discover runnable.
-                    removeCallbacks(mDiscoverRunnable);
+                    stopDiscovering(); // If connected, don't look for more connections... transfer payload... disconnect then continue...
+                }
+                if (!isAdvertising()) {
+                    startAdvertising();
                 }
                 break;
             case UNKNOWN:
@@ -344,6 +388,10 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
                 // no-op
                 break;
         }
+        updateUI(oldState, newState);
+    }
+
+    private void updateUI(State oldState, State newState) {
 
         // Update the UI.
         switch (oldState) {
@@ -391,7 +439,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         }
     }
 
-    /** Transitions from the old state to the new state with an animation implying moving forward. */
+    /**
+     * Transitions from the old state to the new state with an animation implying moving forward.
+     */
     @UiThread
     private void transitionForward(State oldState, final State newState) {
         mPreviousStateView.setVisibility(View.VISIBLE);
@@ -413,7 +463,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         }
     }
 
-    /** Transitions from the old state to the new state with an animation implying moving backward. */
+    /**
+     * Transitions from the old state to the new state with an animation implying moving backward.
+     */
     @UiThread
     private void transitionBackward(State oldState, final State newState) {
         mPreviousStateView.setVisibility(View.VISIBLE);
@@ -480,7 +532,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         return animator;
     }
 
-    /** Updates the {@link TextView} with the correct color/text for the given {@link State}. */
+    /**
+     * Updates the {@link TextView} with the correct color/text for the given {@link State}.
+     */
     @UiThread
     private void updateTextView(TextView textView, State state) {
         switch (state) {
@@ -503,7 +557,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         }
     }
 
-    /** The device has moved. We need to decide if it was intentional or not. */
+    /**
+     * The device has moved. We need to decide if it was intentional or not.
+     */
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         float x = sensorEvent.values[0];
@@ -519,15 +575,19 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         if (gForce > SHAKE_THRESHOLD_GRAVITY && getState() == State.DISCOVERING) {
             logD("Device shaken");
             vibrate();
-            setState(State.ADVERTISING);
+//            setState(State.ADVERTISING);
+
             postDelayed(mDiscoverRunnable, ADVERTISING_DURATION);
         }
     }
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    }
 
-    /** Vibrates the phone. */
+    /**
+     * Vibrates the phone.
+     */
     private void vibrate() {
         Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         if (hasPermissions(this, Manifest.permission.VIBRATE) && vibrator.hasVibrator()) {
@@ -535,7 +595,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         }
     }
 
-    /** {@see ConnectionsActivity#onReceive(Endpoint, Payload)} */
+    /**
+     * {@see ConnectionsActivity#onReceive(Endpoint, Payload)}
+     */
     // TODO: send back info here.
     @Override
     protected void onReceive(Endpoint endpoint, Payload payload) {
@@ -562,7 +624,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         }
     }
 
-    /** Stops all currently streaming audio tracks. */
+    /**
+     * Stops all currently streaming audio tracks.
+     */
     private void stopPlaying() {
         logV("stopPlaying()");
         for (AudioPlayer player : mAudioPlayers) {
@@ -571,12 +635,16 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         mAudioPlayers.clear();
     }
 
-    /** @return True if currently playing. */
+    /**
+     * @return True if currently playing.
+     */
     private boolean isPlaying() {
         return !mAudioPlayers.isEmpty();
     }
 
-    /** Starts recording sound from the microphone and streaming it to all connected devices. */
+    /**
+     * Starts recording sound from the microphone and streaming it to all connected devices.
+     */
     private void startRecording() {
         logV("startRecording()");
         try {
@@ -593,7 +661,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         }
     }
 
-    /** Stops streaming sound from the microphone. */
+    /**
+     * Stops streaming sound from the microphone.
+     */
     private void stopRecording() {
         logV("stopRecording()");
         if (mRecorder != null) {
@@ -602,12 +672,16 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         }
     }
 
-    /** @return True if currently streaming from the microphone. */
+    /**
+     * @return True if currently streaming from the microphone.
+     */
     private boolean isRecording() {
         return mRecorder != null && mRecorder.isRecording();
     }
 
-    /** {@see ConnectionsActivity#getRequiredPermissions()} */
+    /**
+     * {@see ConnectionsActivity#getRequiredPermissions()}
+     */
     @Override
     protected String[] getRequiredPermissions() {
         return join(
@@ -615,7 +689,9 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
                 Manifest.permission.RECORD_AUDIO);
     }
 
-    /** Joins 2 arrays together. */
+    /**
+     * Joins 2 arrays together.
+     */
     private static String[] join(String[] a, String... b) {
         String[] join = new String[a.length + b.length];
         System.arraycopy(a, 0, join, 0, a.length);
@@ -632,29 +708,39 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         return mName;
     }
 
-    /** {@see ConnectionsActivity#getServiceId()} */
+    /**
+     * {@see ConnectionsActivity#getServiceId()}
+     */
     @Override
     public String getServiceId() {
         return SERVICE_ID;
     }
 
-    /** {@see ConnectionsActivity#getStrategy()} */
+    /**
+     * {@see ConnectionsActivity#getStrategy()}
+     */
     @Override
     public Strategy getStrategy() {
         return STRATEGY;
     }
 
-    /** {@see Handler#post()} */
+    /**
+     * {@see Handler#post()}
+     */
     protected void post(Runnable r) {
         mUiHandler.post(r);
     }
 
-    /** {@see Handler#postDelayed(Runnable, long)} */
+    /**
+     * {@see Handler#postDelayed(Runnable, long)}
+     */
     protected void postDelayed(Runnable r, long duration) {
         mUiHandler.postDelayed(r, duration);
     }
 
-    /** {@see Handler#removeCallbacks(Runnable)} */
+    /**
+     * {@see Handler#removeCallbacks(Runnable)}
+     */
     protected void removeCallbacks(Runnable r) {
         mUiHandler.removeCallbacks(r);
     }
@@ -721,19 +807,25 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
      */
     private abstract static class AnimatorListener implements Animator.AnimatorListener {
         @Override
-        public void onAnimationStart(Animator animator) {}
+        public void onAnimationStart(Animator animator) {
+        }
 
         @Override
-        public void onAnimationEnd(Animator animator) {}
+        public void onAnimationEnd(Animator animator) {
+        }
 
         @Override
-        public void onAnimationCancel(Animator animator) {}
+        public void onAnimationCancel(Animator animator) {
+        }
 
         @Override
-        public void onAnimationRepeat(Animator animator) {}
+        public void onAnimationRepeat(Animator animator) {
+        }
     }
 
-    /** States that the UI goes through. */
+    /**
+     * States that the UI goes through.
+     */
     public enum State {
         UNKNOWN,
         DISCOVERING,

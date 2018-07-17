@@ -414,7 +414,12 @@ public abstract class ConnectionsActivity extends AppCompatActivity {
      * Called when a connection with this endpoint has failed. Override this method to act on the
      * event.
      */
-    protected void onConnectionFailed(Endpoint endpoint) {}
+    protected void onConnectionFailed(Endpoint endpoint) {
+        mDiscoveredEndpoints.remove(endpoint);
+        disconnect(endpoint);
+        connectedToEndpoint(endpoint);
+
+    }
 
     /** Called when someone has connected to us. Override this method to act on the event. */
     protected void onEndpointConnected(Endpoint endpoint) {}
