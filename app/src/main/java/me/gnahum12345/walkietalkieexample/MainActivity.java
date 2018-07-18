@@ -36,9 +36,18 @@ import com.google.android.gms.nearby.connection.Payload;
 import com.google.android.gms.nearby.connection.Strategy;
 
 
+import org.json.JSONObject;
+
 import java.io.BufferedWriter;
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.SyncFailedException;
 import java.io.Writer;
 import java.util.Collection;
 import java.util.HashSet;
@@ -164,8 +173,8 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
 
 
     /**
-     *  For testing purposes. the dummyFile is a proof of concept
-     *  that indeed a file can be transferred in a cluster type situation.
+     * For testing purposes. the dummyFile is a proof of concept
+     * that indeed a file can be transferred in a cluster type situation.
      */
     private File mDummyFile;
     /**
@@ -219,20 +228,8 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         mDebugLogView.setMovementMethod(new ScrollingMovementMethod());
 
 
-        Writer output = null;
-        String text = "Www.criandcric.com. is my site";
-        mDummyFile = new File("write.txt");
-        try {
-            output = new BufferedWriter(new FileWriter(mDummyFile));
-            output.write(text);
-            output.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-            logE("something went wrong in creating the file", e);
-        }
-
+        createFile();
         mName = generateRandomName();
-
 
 
         ((TextView) findViewById(R.id.name)).setText(mName);
@@ -648,10 +645,13 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
             player.start();
         }
         Toast.makeText(this, "I am on the received side", Toast.LENGTH_SHORT).show();
-        if (payload.getType() == Payload.Type.FILE) {
-            String content = payload.asFile().asJavaFile().toString();
+
+
+
+        if (payload.getType() == Payload.Type.BYTES) {
+            byte[] b = payload.asBytes();
+            String content = new String(b);
             logD(content);
-            Toast.makeText(this, content, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -674,6 +674,57 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
     }
 
     /**
+     * Creates a file and inputs a basic string into it.
+     *
+     */
+    private void createFile() {
+        try {
+            String filePath = this.getFilesDir().getPath().toString() + "/test1.txt";
+            mDummyFile = new File(filePath);
+            if (mDummyFile.createNewFile()) {
+                logD("File was created");
+            } else {
+                logD("File already exists");
+            }
+            FileWriter fileWriter = new FileWriter(mDummyFile);
+            fileWriter.write("This is ");
+            fileWriter.write("a test");
+            fileWriter.flush();
+            fileWriter.close();
+        } catch (IOException e) {
+            logE("There was a file exception...", e);
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Creates a file and inputs a basic string into it.
+     *
+     * @param File f the file which will be created.
+     * @return File.
+     */
+    private File createFile(File randomFile, String extension) {
+        try {
+            String filePath = this.getFilesDir().getPath().toString() + "/" + extension;
+            randomFile = new File(filePath);
+            if (randomFile.createNewFile()) {
+                logD("File was created");
+            } else {
+                logD("File already exists");
+            }
+            FileWriter fileWriter = new FileWriter(randomFile);
+            fileWriter.write("This is ");
+            fileWriter.write("a test");
+            fileWriter.flush();
+            fileWriter.close();
+        } catch (IOException e) {
+            logE("There was a file exception...", e);
+            e.printStackTrace();
+            return null;
+        }
+        return randomFile;
+    }
+    /**
      * Starts recording sound from the microphone and streaming it to all connected devices.
      */
     private void startRecording() {
@@ -681,13 +732,28 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         try {
             ParcelFileDescriptor[] payloadPipe = ParcelFileDescriptor.createPipe();
 
+
             // Send the first half of the payload (the read side) to Nearby Connections.
-            send(Payload.fromFile(mDummyFile));
-//            send(Payload.fromStream(payloadPipe[0]));
+//            boolean fileExists = mDummyFile.exists();
+//            while (!fileExists) {
+//                logD("File exists:" + fileExists);
+//                createFile();
+//                fileExists = mDummyFile.exists();
+//            }
+//            logD("File exists:" + fileExists);
+//            send(Payload.fromFile(mDummyFile));
+
+            String senderInfo = "This is my info string";
+
+            send(Payload.fromBytes(senderInfo.getBytes()));
+
+
+
+            //send(Payload.fromStream(payloadPipe[0]));
 
             // Use the second half of the payload (the write side) in AudioRecorder.
-            mRecorder = new AudioRecorder(payloadPipe[1]);
-            mRecorder.start();
+//            mRecorder = new AudioRecorder(payloadPipe[1]);
+//            mRecorder.start();
         } catch (IOException e) {
             logE("startRecording() failed", e);
         }
