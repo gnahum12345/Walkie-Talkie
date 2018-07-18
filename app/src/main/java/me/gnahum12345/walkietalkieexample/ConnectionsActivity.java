@@ -47,6 +47,7 @@ public abstract class ConnectionsActivity extends AppCompatActivity {
      * These permissions are required before connecting to Nearby Connections. Only {@link
      * Manifest.permission#ACCESS_COARSE_LOCATION} is considered dangerous, so the others should be
      * granted just by having them in our AndroidManfiest.xml
+     *
      */
     private static final String[] REQUIRED_PERMISSIONS =
             new String[] {

@@ -35,11 +35,16 @@ import com.google.android.gms.nearby.connection.ConnectionInfo;
 import com.google.android.gms.nearby.connection.Payload;
 import com.google.android.gms.nearby.connection.Strategy;
 
+
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
+import java.io.File;
 
 /**
  * Our WalkieTalkie Activity. This Activity has 4 {@link State}s.
@@ -157,6 +162,12 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
                 }
             };
 
+
+    /**
+     *  For testing purposes. the dummyFile is a proof of concept
+     *  that indeed a file can be transferred in a cluster type situation.
+     */
+    private File mDummyFile;
     /**
      * For recording audio as the user speaks.
      */
@@ -207,7 +218,22 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
         mDebugLogView.setVisibility(DEBUG ? View.VISIBLE : View.GONE);
         mDebugLogView.setMovementMethod(new ScrollingMovementMethod());
 
+
+        Writer output = null;
+        String text = "Www.criandcric.com. is my site";
+        mDummyFile = new File("write.txt");
+        try {
+            output = new BufferedWriter(new FileWriter(mDummyFile));
+            output.write(text);
+            output.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            logE("something went wrong in creating the file", e);
+        }
+
         mName = generateRandomName();
+
+
 
         ((TextView) findViewById(R.id.name)).setText(mName);
     }
@@ -618,9 +644,14 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
                                     });
                         }
                     };
-            Toast.makeText(this, "I am on the received side", Toast.LENGTH_SHORT).show();
             mAudioPlayers.add(player);
             player.start();
+        }
+        Toast.makeText(this, "I am on the received side", Toast.LENGTH_SHORT).show();
+        if (payload.getType() == Payload.Type.FILE) {
+            String content = payload.asFile().asJavaFile().toString();
+            logD(content);
+            Toast.makeText(this, content, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -651,7 +682,8 @@ public class MainActivity extends ConnectionsActivity implements SensorEventList
             ParcelFileDescriptor[] payloadPipe = ParcelFileDescriptor.createPipe();
 
             // Send the first half of the payload (the read side) to Nearby Connections.
-            send(Payload.fromStream(payloadPipe[0]));
+            send(Payload.fromFile(mDummyFile));
+//            send(Payload.fromStream(payloadPipe[0]));
 
             // Use the second half of the payload (the write side) in AudioRecorder.
             mRecorder = new AudioRecorder(payloadPipe[1]);
